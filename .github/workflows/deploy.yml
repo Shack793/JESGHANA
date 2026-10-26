@@ -1,0 +1,60 @@
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL || 'https://valuable-caiman-225.convex.cloud' }}
+      VITE_HERCULES_OIDC_AUTHORITY: ${{ vars.VITE_HERCULES_OIDC_AUTHORITY || 'https://01m5fec929tw0959yk3jn847qc.hercules-auth.com' }}
+      VITE_HERCULES_OIDC_CLIENT_ID: ${{ vars.VITE_HERCULES_OIDC_CLIENT_ID || 'dfFxDTMFaYKUDeUHkHUkhOiQDVeCHupt' }}
+      VITE_HERCULES_OIDC_PROMPT: ${{ vars.VITE_HERCULES_OIDC_PROMPT || 'select_account' }}
+      VITE_HERCULES_OIDC_RESPONSE_TYPE: ${{ vars.VITE_HERCULES_OIDC_RESPONSE_TYPE || 'code' }}
+      VITE_HERCULES_OIDC_SCOPE: ${{ vars.VITE_HERCULES_OIDC_SCOPE || 'openid profile email offline_access' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Package build
+        run: tar -czf site.tar.gz -C dist .
+
+      - name: Upload and release
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          scp -P "$DEPLOY_PORT" -i ~/.ssh/deploy_key site.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/jesghana-site.tar.gz"
+          ssh -p "$DEPLOY_PORT" -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            'set -euo pipefail; find /var/www/jesghana -mindepth 1 -delete; tar -xzf /tmp/jesghana-site.tar.gz -C /var/www/jesghana; chmod -R a+rX /var/www/jesghana; rm -f /tmp/jesghana-site.tar.gz; echo "Deployed $(date -u +%FT%TZ)"'

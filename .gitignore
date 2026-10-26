@@ -25,5 +25,6 @@ tsconfig.tsbuildinfo
 *.sln
 *.sw?
 
-# Environment variables
+# Environment variables and server credentials
 .env*
+server.md
