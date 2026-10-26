@@ -57,4 +57,4 @@ jobs:
           ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
           scp -P "$DEPLOY_PORT" -i ~/.ssh/deploy_key site.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/jesghana-site.tar.gz"
           ssh -p "$DEPLOY_PORT" -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
-            'set -euo pipefail; find /var/www/jesghana -mindepth 1 -delete; tar -xzf /tmp/jesghana-site.tar.gz -C /var/www/jesghana; chmod -R a+rX /var/www/jesghana; rm -f /tmp/jesghana-site.tar.gz; echo "Deployed $(date -u +%FT%TZ)"'
+            "set -euo pipefail; find /var/www/jesghana -mindepth 1 -delete; tar -xzf /tmp/jesghana-site.tar.gz -C /var/www/jesghana; chmod -R a+rX /var/www/jesghana; rm -f /tmp/jesghana-site.tar.gz; printf 'commit=%s\ndeployed=%s\n' '$GITHUB_SHA' \"\$(date -u +%FT%TZ)\" > /var/www/jesghana/.deploy-meta; cat /var/www/jesghana/.deploy-meta"
